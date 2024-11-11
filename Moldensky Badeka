@@ -1,0 +1,89 @@
+import numpy as np
+import pandas as pd
+from scipy.optimize import least_squares
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+# Step 1: Load data from CSV
+# Assume the CSV file is named 'coordinates.csv' with columns: 
+# ['no.point', 'XGPS', 'YGPS', 'ZGPS', 'XC', 'YC', 'ZC']
+data = pd.read_csv('sample_data/COORDINATES/COORDINATES2.csv')
+# Extract GPS and local coordinates as numpy arrays
+gps_coords = data[['XGPS', 'YGPS', 'ZGPS']].values
+local_coords = data[['XC', 'YC', 'ZC']].values
+# Step 2: Split data into training and test sets
+gps_train, gps_test, local_train, local_test = train_test_split(gps_coords, local_coords, test_size=0.3, random_state=42)
+# Step 2: Split data into training and test sets
+gps_train, gps_test, local_train, local_test = train_test_split(gps_coords, local_coords, test_size=0.3, random_state=42)
+# Step 3: Define transformation function
+def transformation(params, gps, local):
+    Tx, Ty, Tz, Rx, Ry, Rz, s = params
+    # Rotation matrix with small angle approximation
+    R = np.array([
+        [1, -Rz, Ry],
+        [Rz, 1, -Rx],
+        [-Ry, Rx, 1]
+    ]) * (1 + s)  # Apply scale factor
+
+    # Transform coordinates
+    transformed = (gps @ R.T) + np.array([Tx, Ty, Tz])
+    residuals = transformed - local  # Compute residuals
+    return residuals.ravel()
+# Step 3: Define transformation function
+def transformation(params, gps, local):
+    Tx, Ty, Tz, Rx, Ry, Rz, s = params
+    # Rotation matrix with small angle approximation
+    R = np.array([
+        [1, -Rz, Ry],
+        [Rz, 1, -Rx],
+        [-Ry, Rx, 1]
+    ]) * (1 + s)  # Apply scale factor
+
+    # Transform coordinates
+    transformed = (gps @ R.T) + np.array([Tx, Ty, Tz])
+    residuals = transformed - local  # Compute residuals
+    return residuals.ravel()
+# Initial guess for parameters
+initial_params = [0, 0, 0, 0, 0, 0, 0]
+print("\nInitial Parameters (Translation, Rotation, Scale):", initial_params)
+
+
+# Step 4: Solve for transformation parameters using training set
+result = least_squares(transformation, initial_params, args=(gps_train, local_train))
+Tx, Ty, Tz, Rx, Ry, Rz, s = result.x
+
+
+print("\nOptimized Translation Parameters (Tx, Ty, Tz):", Tx, Ty, Tz)
+print("Optimized Rotation Parameters (Rx, Ry, Rz):", Rx, Ry, Rz)
+print("Optimized Scale Factor (s):", s)
+# Apply the transformation on the test set
+R = np.array([
+    [1, -Rz, Ry],
+    [Rz, 1, -Rx],
+    [-Ry, Rx, 1]
+]) * (1 + s)
+
+transformed_test_coords = (gps_test @ R.T) + np.array([Tx, Ty, Tz])
+# Step 5: Plot original and transformed test coordinates
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# Plot original local test coordinates
+ax.scatter(local_test[:, 0], local_test[:, 1], local_test[:, 2], color='blue', label='Local Test Coordinates')
+
+# Plot transformed GPS test coordinates
+ax.scatter(transformed_test_coords[:, 0], transformed_test_coords[:, 1], transformed_test_coords[:, 2], color='red', marker='^', label='Transformed GPS Test Coordinates')
+
+# Connect corresponding points
+for i in range(len(local_test)):
+    ax.plot([local_test[i, 0], transformed_test_coords[i, 0]],
+            [local_test[i, 1], transformed_test_coords[i, 1]],
+            [local_test[i, 2], transformed_test_coords[i, 2]], color='gray', linestyle='--')
+
+# Labels and legend
+ax.set_xlabel('X')
+ax.set_ylabel('Y')
+ax.set_zlabel('Z')
+ax.legend()
+plt.title("Validation of Transformation: Local Test vs Transformed GPS Test Coordinates")
+plt.show()
